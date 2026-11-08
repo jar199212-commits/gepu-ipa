@@ -135,7 +135,7 @@ struct HomeView: View {
             searchTask = Task {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 if Task.isCancelled { return }
-                let ids = store.searchSongs(trimmed)
+                let ids = store.searchSongs(trimmed).map { $0.id }
                 if Task.isCancelled { return }
                 resultIDs = ids
             }
