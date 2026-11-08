@@ -1,0 +1,58 @@
+name: Build IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 40
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 生成 Xcode 工程
+        run: xcodegen generate
+
+      - name: 编译（不签名）
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project GePu.xcodeproj \
+            -scheme GePu \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: 打包为 TrollStore 可安装的 IPA
+        run: |
+          set -e
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -n 1)
+          echo "APP = $APP"
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          APPNAME=$(basename "$APP")
+          # ad-hoc 签名，TrollStore / 巨魔商店可直接安装
+          codesign --force --deep --sign - "Payload/$APPNAME"
+          /usr/bin/zip -qry GePu.ipa Payload
+          ls -lh GePu.ipa
+          unzip -l GePu.ipa | head -n 20
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: GePu-IPA
+          path: GePu.ipa
+          if-no-files-found: error
